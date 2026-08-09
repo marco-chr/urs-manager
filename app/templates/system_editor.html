@@ -1,0 +1,699 @@
+{% extends "base.html" %}
+{% block title %}{{ system.name }} — URS Manager{% endblock %}
+
+{% block extra_head %}
+<style>
+.req-type-badge { font-size: .7rem; padding: .2rem .45rem; }
+.flag-yes { color: #198754; font-weight: 600; }
+.flag-no  { color: #adb5bd; }
+.toolbar { background: #f8f9fa; border: 1px solid #dee2e6; border-radius: .375rem; padding: .5rem .75rem; }
+#reqTable td { vertical-align: middle; }
+#reqTable td.desc-cell { word-break: break-word; white-space: pre-wrap; }
+#reqTable td.note-cell { word-break: break-word; white-space: pre-wrap; }
+.section-row td { background: #e9f0fb !important; font-weight: 600; }
+
+/* Column resize handles */
+#reqTable thead th {
+  position: relative;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.col-resize-handle {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 1;
+  user-select: none;
+}
+.col-resize-handle:hover,
+.col-resize-handle.dragging {
+  background: rgba(255,255,255,0.35);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb + title -->
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+  <div>
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb mb-0">
+        <li class="breadcrumb-item"><a href="/">Dashboard</a></li>
+        <li class="breadcrumb-item active">{{ system.name }}</li>
+      </ol>
+    </nav>
+    <h5 class="mb-0 mt-1">
+      {{ system.name }}
+      <span class="badge {% if system.status == 'approved' %}bg-success{% elif system.status == 'review' %}bg-warning text-dark{% else %}bg-secondary{% endif %} ms-1">
+        {{ system.status }}
+      </span>
+    </h5>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    {% if is_owner %}
+    <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#editSystemModal">
+      <i class="bi bi-gear"></i> Settings
+    </button>
+    {% endif %}
+    {% if can_edit %}
+    <button class="btn btn-outline-info btn-sm" data-bs-toggle="modal" data-bs-target="#sectionsModal">
+      <i class="bi bi-collection"></i> Sections
+    </button>
+    {% endif %}
+    <a href="/systems/{{ system.id }}/export/excel" class="btn btn-outline-success btn-sm">
+      <i class="bi bi-file-earmark-excel"></i> Export Excel
+    </a>
+    <a href="/systems/{{ system.id }}/audit" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-journal-text"></i> Audit Log
+    </a>
+    {% if is_owner %}
+    <button class="btn btn-outline-warning btn-sm" data-bs-toggle="modal" data-bs-target="#accessModal">
+      <i class="bi bi-people"></i> Manage Access
+    </button>
+    {% endif %}
+    {% if can_edit %}
+    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#reqModal" onclick="openAddReq()">
+      <i class="bi bi-plus-lg"></i> Add Requirement
+    </button>
+    {% else %}
+    <span class="badge bg-secondary align-self-center"><i class="bi bi-lock"></i> Read only</span>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Toolbar / filters -->
+<div class="toolbar mb-3 d-flex flex-wrap gap-2 align-items-center">
+  <select id="filterSection" class="form-select form-select-sm" style="width:auto">
+    <option value="">All Sections</option>
+    {% for s in sections %}
+    <option value="{{ s.id }}">{{ s.name }}</option>
+    {% endfor %}
+  </select>
+  <select id="filterType" class="form-select form-select-sm" style="width:auto">
+    <option value="">All Types</option>
+    {% for rt in req_types %}
+    <option value="{{ rt }}">{{ rt.replace('_',' ').title() }}</option>
+    {% endfor %}
+  </select>
+  <select id="filterMust" class="form-select form-select-sm" style="width:auto">
+    <option value="">Must / Nice</option>
+    <option value="true">Must Have</option>
+    <option value="false">Nice to Have</option>
+  </select>
+  <select id="filterGmp" class="form-select form-select-sm" style="width:auto">
+    <option value="">GMP / Non-GMP</option>
+    <option value="true">GMP</option>
+    <option value="false">Non-GMP</option>
+  </select>
+  <div class="ms-auto d-flex gap-2">
+    <button class="btn btn-outline-secondary btn-sm" onclick="clearFilters()"><i class="bi bi-x-circle"></i> Clear</button>
+    {% if user.role != 'viewer' %}
+    <button class="btn btn-outline-warning btn-sm" data-bs-toggle="modal" data-bs-target="#findReplaceModal">
+      <i class="bi bi-search"></i> Find / Replace
+    </button>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Requirements table -->
+<div class="table-responsive">
+  <table id="reqTable" class="table table-hover table-bordered table-sm align-middle w-100">
+    <thead class="table-dark">
+      <tr>
+        <th>Section</th>
+        <th>Req ID</th>
+        <th>Type</th>
+        <th>Description</th>
+        <th>Must Have</th>
+        <th>GMP</th>
+        <th>Note</th>
+        {% if user.role != 'viewer' %}
+        <th style="width:80px">Actions</th>
+        {% endif %}
+      </tr>
+    </thead>
+    <tbody id="reqBody">
+      <tr><td colspan="8" class="text-center text-muted py-3"><i class="bi bi-hourglass-split"></i> Loading…</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ====== MODALS ====== -->
+
+<!-- Edit System Settings -->
+<div class="modal fade" id="editSystemModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" action="/systems/{{ system.id }}/update">
+        <div class="modal-header"><h5 class="modal-title">System Settings</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+          <div class="mb-3"><label class="form-label fw-semibold">Name</label>
+            <input type="text" name="name" class="form-control" value="{{ system.name }}" required/></div>
+          <div class="mb-3"><label class="form-label fw-semibold">Description</label>
+            <textarea name="description" class="form-control" rows="3">{{ system.description or '' }}</textarea></div>
+          <div class="mb-3"><label class="form-label fw-semibold">Status</label>
+            <select name="status" class="form-select">
+              {% for st in ['draft','review','approved'] %}
+              <option value="{{ st }}" {% if system.status == st %}selected{% endif %}>{{ st.title() }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Sections Manager Modal -->
+<div class="modal fade" id="sectionsModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-collection"></i> Manage Sections</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        {% if user.role != 'viewer' %}
+        <form id="addSectionForm" class="d-flex gap-2 mb-3">
+          <input type="text" id="newSectionName" class="form-control form-control-sm" placeholder="Section name…" required/>
+          <input type="number" id="newSectionOrder" class="form-control form-control-sm" style="width:80px" placeholder="Order" value="0"/>
+          <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg"></i> Add</button>
+        </form>
+        {% endif %}
+        <table class="table table-sm table-bordered" id="sectionsTable">
+          <thead class="table-secondary"><tr><th>Order</th><th>Name</th>{% if user.role != 'viewer' %}<th style="width:100px">Actions</th>{% endif %}</tr></thead>
+          <tbody id="sectionsBody">
+            {% for s in sections %}
+            <tr data-sec-id="{{ s.id }}">
+              <td><input type="number" class="form-control form-control-sm sec-order" value="{{ s.order }}" style="width:70px"/></td>
+              <td><input type="text" class="form-control form-control-sm sec-name" value="{{ s.name }}"/></td>
+              {% if user.role != 'viewer' %}
+              <td>
+                <button class="btn btn-outline-primary btn-sm" onclick="saveSection({{ s.id }})"><i class="bi bi-check-lg"></i></button>
+                <button class="btn btn-outline-danger btn-sm" onclick="deleteSection({{ s.id }}, '{{ s.name|e }}')"><i class="bi bi-trash"></i></button>
+              </td>
+              {% endif %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add / Edit Requirement Modal -->
+<div class="modal fade" id="reqModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="reqModalTitle">Add Requirement</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="reqId"/>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Section</label>
+            <select id="fSection" class="form-select">
+              <option value="">— No section —</option>
+              {% for s in sections %}
+              <option value="{{ s.id }}">{{ s.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label fw-semibold">Req ID</label>
+            <input type="text" id="fReqId" class="form-control" placeholder="e.g. URS-001"/>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label fw-semibold">Type</label>
+            <select id="fType" class="form-select">
+              {% for rt in req_types %}
+              <option value="{{ rt }}">{{ rt.replace('_',' ').title() }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-12">
+            <label class="form-label fw-semibold">Description <span class="text-danger">*</span></label>
+            <textarea id="fDescription" class="form-control" rows="4" required placeholder="Requirement description…"></textarea>
+          </div>
+          <div class="col-12">
+            <label class="form-label fw-semibold">Note</label>
+            <textarea id="fNote" class="form-control" rows="2" placeholder="Optional notes, references…"></textarea>
+          </div>
+          <div class="col-md-6">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="fMustHave" checked/>
+              <label class="form-check-label fw-semibold" for="fMustHave">Must Have <small class="text-muted fw-normal">(off = Nice to Have)</small></label>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="fGmpFlag"/>
+              <label class="form-check-label fw-semibold" for="fGmpFlag">GMP Requirement</label>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="saveRequirement()"><i class="bi bi-check-lg"></i> Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Find / Replace Modal -->
+<div class="modal fade" id="findReplaceModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-search"></i> Find / Replace</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Find text</label>
+          <input type="text" id="frFind" class="form-control" placeholder="Text to find…"/>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Replace with</label>
+          <input type="text" id="frReplace" class="form-control" placeholder="Replacement text…"/>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Search in</label>
+          <div class="form-check"><input class="form-check-input" type="checkbox" id="frInDesc" checked/><label class="form-check-label" for="frInDesc">Description</label></div>
+          <div class="form-check"><input class="form-check-input" type="checkbox" id="frInNote" checked/><label class="form-check-label" for="frInNote">Note</label></div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Limit to section (optional)</label>
+          <select id="frSection" class="form-select">
+            <option value="">All sections</option>
+            {% for s in sections %}
+            <option value="{{ s.id }}">{{ s.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div id="frResult" class="alert alert-info d-none"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-warning" onclick="doFindReplace()"><i class="bi bi-arrow-repeat"></i> Replace All</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Manage Access Modal (owner/admin only) -->
+{% if is_owner %}
+<div class="modal fade" id="accessModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-people"></i> Manage Access — {{ system.name }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-3">
+          Owner: <strong>{{ system.creator.username if system.creator else '—' }}</strong>.
+          Collaborators below can edit requirements and sections.
+        </p>
+
+        <!-- Current collaborators -->
+        <h6 class="fw-semibold">Editors with access</h6>
+        <ul class="list-group mb-3" id="collabList">
+          {% for c in collaborators %}
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-person"></i> {{ c.user.username }}{% if c.user.full_name %} <span class="text-muted small">({{ c.user.full_name }})</span>{% endif %}</span>
+            <button class="btn btn-outline-danger btn-sm py-0" onclick="removeCollaborator({{ c.user_id }}, '{{ c.user.username|e }}')">
+              <i class="bi bi-x-lg"></i> Remove
+            </button>
+          </li>
+          {% else %}
+          <li class="list-group-item text-muted small" id="noCollabRow">No collaborators yet.</li>
+          {% endfor %}
+        </ul>
+
+        <!-- Add collaborator -->
+        {% if all_editors %}
+        <h6 class="fw-semibold">Add editor</h6>
+        <div class="d-flex gap-2">
+          <select id="addCollabSelect" class="form-select form-select-sm">
+            <option value="">— Select a user —</option>
+            {% for u in all_editors %}
+            <option value="{{ u.id }}" {% if u.id in collaborator_ids %}disabled{% endif %}>
+              {{ u.username }}{% if u.full_name %} ({{ u.full_name }}){% endif %}
+              {% if u.id in collaborator_ids %} ✓{% endif %}
+            </option>
+            {% endfor %}
+          </select>
+          <button class="btn btn-primary btn-sm" onclick="addCollaborator()">
+            <i class="bi bi-plus-lg"></i> Add
+          </button>
+        </div>
+        {% else %}
+        <p class="text-muted small">No other editor-role users exist. Create users in the admin panel first.</p>
+        {% endif %}
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Delete Req confirm -->
+<div class="modal fade" id="deleteReqModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title">Delete Requirement</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">Delete requirement <strong id="deleteReqId"></strong>?</div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-danger btn-sm" id="deleteReqConfirm">Delete</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const SYSTEM_ID = {{ system.id }};
+const CAN_EDIT = {{ 'true' if user.role != 'viewer' else 'false' }};
+const SECTIONS = {{ sections_json | tojson }};
+let allReqs = [];
+let dtTable = null;
+
+const TYPE_LABELS = {
+  functional: 'Functional', non_functional: 'Non-Functional',
+  regulatory: 'Regulatory', interface: 'Interface',
+  environmental: 'Environmental', ehs: 'EHS'
+};
+const TYPE_COLORS = {
+  functional: 'primary', non_functional: 'secondary', regulatory: 'danger',
+  interface: 'info', environmental: 'success', ehs: 'warning'
+};
+
+async function loadRequirements() {
+  const res = await fetch(`/api/systems/${SYSTEM_ID}/requirements`);
+  allReqs = await res.json();
+  renderTable();
+}
+
+function sectionName(id) {
+  const s = SECTIONS.find(x => x.id == id);
+  return s ? s.name : '—';
+}
+
+function renderTable() {
+  const secFilter  = document.getElementById('filterSection').value;
+  const typeFilter = document.getElementById('filterType').value;
+  const mustFilter = document.getElementById('filterMust').value;
+  const gmpFilter  = document.getElementById('filterGmp').value;
+
+  let rows = allReqs.filter(r => {
+    if (secFilter  && String(r.section_id) !== secFilter)  return false;
+    if (typeFilter && r.req_type !== typeFilter)            return false;
+    if (mustFilter && String(r.must_have) !== mustFilter)  return false;
+    if (gmpFilter  && String(r.gmp_flag)  !== gmpFilter)   return false;
+    return true;
+  });
+
+  if (dtTable) { dtTable.destroy(); dtTable = null; }
+
+  const tbody = document.getElementById('reqBody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-3">No requirements match the current filters.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = rows.map(r => {
+    const typeLabel = TYPE_LABELS[r.req_type] || r.req_type;
+    const typeColor = TYPE_COLORS[r.req_type] || 'secondary';
+    const mustBadge = r.must_have
+      ? '<span class="badge bg-danger">Must</span>'
+      : '<span class="badge bg-light text-dark border">Nice</span>';
+    const gmpBadge = r.gmp_flag
+      ? '<span class="flag-yes"><i class="bi bi-check-circle-fill"></i> GMP</span>'
+      : '<span class="flag-no"><i class="bi bi-dash"></i></span>';
+    const actions = CAN_EDIT ? `
+      <button class="btn btn-outline-primary btn-sm py-0 px-1" onclick="openEditReq(${r.id})" title="Edit"><i class="bi bi-pencil"></i></button>
+      <button class="btn btn-outline-danger btn-sm py-0 px-1" onclick="confirmDeleteReq(${r.id}, '${(r.req_id||'').replace(/'/g,"\\'")}' )" title="Delete"><i class="bi bi-trash"></i></button>
+    ` : '';
+    return `<tr>
+      <td>${r.section_name || '<span class="text-muted">—</span>'}</td>
+      <td><code>${r.req_id || ''}</code></td>
+      <td><span class="badge bg-${typeColor} req-type-badge">${typeLabel}</span></td>
+      <td class="desc-cell">${escHtml(r.description)}</td>
+      <td class="text-center">${mustBadge}</td>
+      <td class="text-center">${gmpBadge}</td>
+      <td class="note-cell">${escHtml(r.note || '')}</td>
+      ${CAN_EDIT ? `<td class="text-center">${actions}</td>` : ''}
+    </tr>`;
+  }).join('');
+
+  dtTable = new DataTable('#reqTable', {
+    pageLength: 25,
+    order: [],
+    autoWidth: false,
+    columnDefs: [{ orderable: false, targets: CAN_EDIT ? [4,5,7] : [4,5] }],
+    language: { search: 'Quick search:' }
+  });
+  makeResizable('reqTable');
+}
+
+function makeResizable(tableId) {
+  const table = document.getElementById(tableId);
+  if (!table) return;
+  const headers = table.querySelectorAll('thead th');
+
+  headers.forEach(th => {
+    // Remove any existing handle before re-adding (renderTable can be called multiple times)
+    const old = th.querySelector('.col-resize-handle');
+    if (old) old.remove();
+
+    const handle = document.createElement('div');
+    handle.className = 'col-resize-handle';
+    th.appendChild(handle);
+
+    handle.addEventListener('mousedown', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      handle.classList.add('dragging');
+
+      const startX   = e.pageX;
+      const startW   = th.offsetWidth;
+
+      const onMove = e => {
+        const newW = Math.max(40, startW + (e.pageX - startX));
+        th.style.width    = newW + 'px';
+        th.style.minWidth = newW + 'px';
+      };
+
+      const onUp = () => {
+        handle.classList.remove('dragging');
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup',   onUp);
+      };
+
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup',   onUp);
+    });
+  });
+}
+
+function clearFilters() {
+  ['filterSection','filterType','filterMust','filterGmp'].forEach(id => document.getElementById(id).value = '');
+  renderTable();
+}
+
+['filterSection','filterType','filterMust','filterGmp'].forEach(id => {
+  document.getElementById(id).addEventListener('change', renderTable);
+});
+
+// --- Req ID auto-suggestion ---
+function suggestReqId(sectionId) {
+  if (document.getElementById('reqId').value) return; // editing — don't overwrite
+  if (!sectionId) { document.getElementById('fReqId').value = ''; return; }
+
+  const sec = SECTIONS.find(x => x.id == sectionId);
+  if (!sec) return;
+
+  const prefix = sec.name.replace(/[^a-zA-Z]/g, '').substring(0, 3).toUpperCase();
+  if (!prefix) return;
+
+  const pattern = new RegExp('^' + prefix + '-(\\d+)$');
+  let maxNum = -1;
+  allReqs.forEach(r => {
+    const m = (r.req_id || '').match(pattern);
+    if (m) maxNum = Math.max(maxNum, parseInt(m[1], 10));
+  });
+
+  document.getElementById('fReqId').value = `${prefix}-${String(maxNum + 1).padStart(3, '0')}`;
+}
+
+document.getElementById('fSection').addEventListener('change', function () {
+  suggestReqId(this.value);
+});
+
+// --- Requirement CRUD ---
+function openAddReq() {
+  document.getElementById('reqModalTitle').textContent = 'Add Requirement';
+  document.getElementById('reqId').value = '';
+  document.getElementById('fReqId').value = '';
+  document.getElementById('fType').value = 'functional';
+  document.getElementById('fDescription').value = '';
+  document.getElementById('fNote').value = '';
+  document.getElementById('fMustHave').checked = true;
+  document.getElementById('fGmpFlag').checked = false;
+
+  // Pre-select active section filter and suggest a req ID
+  const activeSec = document.getElementById('filterSection').value;
+  document.getElementById('fSection').value = activeSec;
+  suggestReqId(activeSec);
+}
+
+function openEditReq(id) {
+  const r = allReqs.find(x => x.id === id);
+  if (!r) return;
+  document.getElementById('reqModalTitle').textContent = 'Edit Requirement';
+  document.getElementById('reqId').value = r.id;
+  document.getElementById('fSection').value = r.section_id || '';
+  document.getElementById('fReqId').value = r.req_id;
+  document.getElementById('fType').value = r.req_type;
+  document.getElementById('fDescription').value = r.description;
+  document.getElementById('fNote').value = r.note;
+  document.getElementById('fMustHave').checked = r.must_have;
+  document.getElementById('fGmpFlag').checked = r.gmp_flag;
+  new bootstrap.Modal(document.getElementById('reqModal')).show();
+}
+
+async function saveRequirement() {
+  const id = document.getElementById('reqId').value;
+  const body = {
+    section_id: document.getElementById('fSection').value ? parseInt(document.getElementById('fSection').value) : null,
+    req_id: document.getElementById('fReqId').value,
+    req_type: document.getElementById('fType').value,
+    description: document.getElementById('fDescription').value.trim(),
+    must_have: document.getElementById('fMustHave').checked,
+    gmp_flag: document.getElementById('fGmpFlag').checked,
+    note: document.getElementById('fNote').value.trim(),
+  };
+  if (!body.description) { alert('Description is required.'); return; }
+  const url = id ? `/api/requirements/${id}` : `/api/systems/${SYSTEM_ID}/requirements`;
+  const method = id ? 'PUT' : 'POST';
+  const res = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  if (!res.ok) { alert('Error saving requirement.'); return; }
+  bootstrap.Modal.getInstance(document.getElementById('reqModal'))?.hide();
+  await loadRequirements();
+}
+
+function confirmDeleteReq(id, reqId) {
+  document.getElementById('deleteReqId').textContent = reqId || `#${id}`;
+  document.getElementById('deleteReqConfirm').onclick = () => deleteRequirement(id);
+  new bootstrap.Modal(document.getElementById('deleteReqModal')).show();
+}
+
+async function deleteRequirement(id) {
+  await fetch(`/api/requirements/${id}`, { method: 'DELETE' });
+  bootstrap.Modal.getInstance(document.getElementById('deleteReqModal'))?.hide();
+  await loadRequirements();
+}
+
+// --- Sections CRUD ---
+document.getElementById('addSectionForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const name = document.getElementById('newSectionName').value.trim();
+  const order = parseInt(document.getElementById('newSectionOrder').value) || 0;
+  if (!name) return;
+  const res = await fetch(`/api/systems/${SYSTEM_ID}/sections`, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ name, order })
+  });
+  if (res.ok) { location.reload(); }
+});
+
+async function saveSection(id) {
+  const row = document.querySelector(`[data-sec-id="${id}"]`);
+  const name = row.querySelector('.sec-name').value.trim();
+  const order = parseInt(row.querySelector('.sec-order').value) || 0;
+  await fetch(`/api/sections/${id}`, {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ name, order })
+  });
+  location.reload();
+}
+
+async function deleteSection(id, name) {
+  if (!confirm(`Delete section "${name}"? Requirements in it will become unsectioned.`)) return;
+  await fetch(`/api/sections/${id}`, { method: 'DELETE' });
+  location.reload();
+}
+
+// --- Find / Replace ---
+async function doFindReplace() {
+  const find = document.getElementById('frFind').value;
+  if (!find) { alert('Enter text to find.'); return; }
+  const fields = [];
+  if (document.getElementById('frInDesc').checked) fields.push('description');
+  if (document.getElementById('frInNote').checked) fields.push('note');
+  const body = {
+    find,
+    replace: document.getElementById('frReplace').value,
+    fields,
+    section_id: document.getElementById('frSection').value ? parseInt(document.getElementById('frSection').value) : null,
+  };
+  const res = await fetch(`/api/systems/${SYSTEM_ID}/requirements/find-replace`, {
+    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  const el = document.getElementById('frResult');
+  el.classList.remove('d-none');
+  el.textContent = `Replaced in ${data.replaced} requirement(s).`;
+  if (data.replaced > 0) await loadRequirements();
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+loadRequirements();
+
+// --- Collaborator management ---
+async function addCollaborator() {
+  const sel = document.getElementById('addCollabSelect');
+  const userId = sel.value;
+  if (!userId) { alert('Select a user first.'); return; }
+  const res = await fetch(`/api/systems/${SYSTEM_ID}/collaborators`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ user_id: parseInt(userId) })
+  });
+  if (res.ok) location.reload();
+  else alert('Failed to add collaborator.');
+}
+
+async function removeCollaborator(userId, username) {
+  if (!confirm(`Remove ${username} from editors of this system?`)) return;
+  const res = await fetch(`/api/systems/${SYSTEM_ID}/collaborators/${userId}`, { method: 'DELETE' });
+  if (res.ok) location.reload();
+  else alert('Failed to remove collaborator.');
+}
+</script>
+{% endblock %}

@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Audit Log — URS Manager{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb mb-0">
+        <li class="breadcrumb-item"><a href="/">Dashboard</a></li>
+        {% if system %}<li class="breadcrumb-item"><a href="/systems/{{ system.id }}">{{ system.name }}</a></li>{% endif %}
+        <li class="breadcrumb-item active">Audit Log</li>
+      </ol>
+    </nav>
+    <h5 class="mb-0 mt-1"><i class="bi bi-journal-text"></i> Audit Log{% if system %} — {{ system.name }}{% endif %}</h5>
+  </div>
+</div>
+
+<table id="auditTable" class="table table-sm table-hover table-bordered w-100">
+  <thead class="table-dark">
+    <tr>
+      <th>Timestamp (UTC)</th>
+      <th>User</th>
+      <th>Action</th>
+      <th>Table</th>
+      <th>Record ID</th>
+      <th>Old Value</th>
+      <th>New Value</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for e in entries %}
+    <tr>
+      <td class="text-nowrap small">{{ e.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+      <td><span class="fw-semibold">{{ e.username }}</span></td>
+      <td>
+        <span class="badge
+          {% if e.action == 'CREATE' %}bg-success
+          {% elif e.action == 'DELETE' %}bg-danger
+          {% else %}bg-warning text-dark{% endif %}">
+          {{ e.action }}
+        </span>
+      </td>
+      <td><code>{{ e.table_name }}</code></td>
+      <td>{{ e.record_id }}</td>
+      <td class="small text-muted" style="max-width:200px;word-break:break-all;white-space:pre-wrap">{{ e.old_value or '' }}</td>
+      <td class="small" style="max-width:200px;word-break:break-all;white-space:pre-wrap">{{ e.new_value or '' }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="7" class="text-center text-muted">No audit entries found.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+new DataTable('#auditTable', { pageLength: 50, order: [[0, 'desc']] });
+</script>
+{% endblock %}
