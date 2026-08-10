@@ -139,7 +139,8 @@
         <th>GMP/GEP</th>
         <th>Note</th>
         {% if user.role != 'viewer' %}
-        <th style="width:80px">Actions</th>
+        <th style="width:70px">Actions</th>
+        <th style="width:60px" class="text-center">Active</th>
         {% endif %}
       </tr>
     </thead>
@@ -449,7 +450,8 @@ function renderTable() {
 
   const tbody = document.getElementById('reqBody');
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-3">No requirements match the current filters.</td></tr>';
+    const cols = CAN_EDIT ? 9 : 7;
+    tbody.innerHTML = `<tr><td colspan="${cols}" class="text-center text-muted py-3">No requirements match the current filters.</td></tr>`;
     return;
   }
 
@@ -462,15 +464,16 @@ function renderTable() {
     const gmpBadge = r.gmp_flag === 'GMP'
       ? '<span class="badge bg-success">GMP</span>'
       : '<span class="badge bg-secondary">GEP</span>';
-    const toggleIcon = r.enabled
-      ? `<button class="btn btn-outline-secondary btn-sm py-0 px-1" onclick="toggleReq(${r.id})" title="Disable"><i class="bi bi-toggle-on text-success"></i></button>`
-      : `<button class="btn btn-outline-secondary btn-sm py-0 px-1" onclick="toggleReq(${r.id})" title="Enable"><i class="bi bi-toggle-off text-danger"></i></button>`;
+    const disabled = !r.enabled;
+    const disAttr  = disabled ? ' disabled' : '';
     const actions = CAN_EDIT ? `
-      ${toggleIcon}
-      <button class="btn btn-outline-primary btn-sm py-0 px-1" onclick="openEditReq(${r.id})" title="Edit"><i class="bi bi-pencil"></i></button>
-      <button class="btn btn-outline-danger btn-sm py-0 px-1" onclick="confirmDeleteReq(${r.id}, '${(r.req_id||'').replace(/'/g,"\\'")}' )" title="Delete"><i class="bi bi-trash"></i></button>
+      <button class="btn btn-outline-primary btn-sm py-0 px-1" onclick="openEditReq(${r.id})" title="Edit"${disAttr}><i class="bi bi-pencil"></i></button>
+      <button class="btn btn-outline-danger btn-sm py-0 px-1" onclick="confirmDeleteReq(${r.id}, '${(r.req_id||'').replace(/'/g,"\\'")}' )" title="Delete"${disAttr}><i class="bi bi-trash"></i></button>
     ` : '';
-    return `<tr class="${r.enabled ? '' : 'req-disabled'}">
+    const toggleBtn = CAN_EDIT ? (disabled
+      ? `<button class="btn btn-sm py-0 px-1 border-0" onclick="toggleReq(${r.id})" title="Enable"><i class="bi bi-toggle-off fs-5 text-danger"></i></button>`
+      : `<button class="btn btn-sm py-0 px-1 border-0" onclick="toggleReq(${r.id})" title="Disable"><i class="bi bi-toggle-on fs-5 text-success"></i></button>`) : '';
+    return `<tr class="${disabled ? 'req-disabled' : ''}">
       <td>${r.section_name || '<span class="text-muted">—</span>'}</td>
       <td><code>${r.req_id || ''}</code></td>
       <td><span class="badge bg-${typeColor} req-type-badge">${typeLabel}</span></td>
@@ -479,6 +482,7 @@ function renderTable() {
       <td class="text-center">${gmpBadge}</td>
       <td class="note-cell">${escHtml(r.note || '')}</td>
       ${CAN_EDIT ? `<td class="text-center">${actions}</td>` : ''}
+      ${CAN_EDIT ? `<td class="text-center">${toggleBtn}</td>` : ''}
     </tr>`;
   }).join('');
 
@@ -486,7 +490,7 @@ function renderTable() {
     pageLength: 25,
     order: [],
     autoWidth: false,
-    columnDefs: [{ orderable: false, targets: CAN_EDIT ? [4,5,7] : [4,5] }],
+    columnDefs: [{ orderable: false, targets: CAN_EDIT ? [4,5,7,8] : [4,5] }],
     language: { search: 'Quick search:' }
   });
   makeResizable('reqTable');
