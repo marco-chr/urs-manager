@@ -38,6 +38,7 @@ def serialize_requirement(req: models.Requirement) -> dict:
         "description": req.description,
         "must_have": req.must_have,
         "gmp_flag": req.gmp_flag,
+        "enabled": req.enabled,
         "note": req.note,
         "section_id": req.section_id,
     }

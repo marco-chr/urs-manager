@@ -106,6 +106,7 @@ class Requirement(Base):
     description = Column(Text, nullable=False)
     must_have = Column(Boolean, default=True)
     gmp_flag = Column(String(8), default="GEP")  # "GMP" or "GEP"
+    enabled = Column(Boolean, default=True)
     note = Column(Text)
     created_by = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime, default=datetime.utcnow)

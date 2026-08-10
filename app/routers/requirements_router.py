@@ -147,6 +147,29 @@ def find_replace(request: Request, system_id: int, body: FindReplaceIn, db: Sess
     return {"replaced": count}
 
 
+@router.post("/requirements/{req_id}/toggle-enabled")
+def toggle_enabled(request: Request, req_id: int, db: Session = Depends(get_db)):
+    user = _user(request, db)
+    if not user:
+        raise HTTPException(401)
+    req = db.query(models.Requirement).filter(models.Requirement.id == req_id).first()
+    if not req:
+        raise HTTPException(404)
+    if not can_edit_system(user, req.system_id, db):
+        raise HTTPException(403)
+    old_state = bool(req.enabled)
+    req.enabled = not old_state
+    req.updated_at = datetime.utcnow()
+    db.commit()
+    audit.log(
+        db, user, "requirements", req.id, "UPDATE",
+        old_value={"enabled": old_state},
+        new_value={"enabled": req.enabled},
+        system_id=req.system_id,
+    )
+    return {"id": req.id, "enabled": req.enabled}
+
+
 def _serialize(req: models.Requirement, db: Session) -> dict:
     section_name = ""
     if req.section_id:
@@ -161,6 +184,7 @@ def _serialize(req: models.Requirement, db: Session) -> dict:
         "description": req.description,
         "must_have": req.must_have,
         "gmp_flag": req.gmp_flag,
+        "enabled": req.enabled if req.enabled is not None else True,
         "note": req.note or "",
         "created_at": req.created_at.isoformat() if req.created_at else "",
         "updated_at": req.updated_at.isoformat() if req.updated_at else "",

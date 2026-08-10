@@ -4,6 +4,17 @@ from sqlalchemy.orm import Session
 
 def run_all(db: Session):
     _migrate_gmp_flag_to_string(db)
+    _migrate_add_enabled_column(db)
+
+
+def _migrate_add_enabled_column(db: Session):
+    """Add enabled column to requirements; all existing rows default to True."""
+    try:
+        db.execute(text("ALTER TABLE requirements ADD COLUMN enabled BOOLEAN DEFAULT 1"))
+        db.execute(text("UPDATE requirements SET enabled = 1 WHERE enabled IS NULL"))
+        db.commit()
+    except Exception:
+        db.rollback()  # column already exists — safe to ignore
 
 
 def _migrate_gmp_flag_to_string(db: Session):

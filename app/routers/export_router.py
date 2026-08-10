@@ -71,7 +71,10 @@ def export_excel(request: Request, system_id: int, db: Session = Depends(get_db)
     sections = {s.id: s.name for s in db.query(models.Section).filter(models.Section.system_id == system_id).all()}
     reqs = (
         db.query(models.Requirement)
-        .filter(models.Requirement.system_id == system_id)
+        .filter(
+            models.Requirement.system_id == system_id,
+            models.Requirement.enabled != False,
+        )
         .order_by(models.Requirement.section_id, models.Requirement.req_id)
         .all()
     )

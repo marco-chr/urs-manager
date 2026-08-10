@@ -12,6 +12,10 @@
 #reqTable td.note-cell { word-break: break-word; white-space: pre-wrap; }
 .section-row td { background: #e9f0fb !important; font-weight: 600; }
 
+/* Disabled requirement rows */
+#reqTable tr.req-disabled td { opacity: 0.45; }
+#reqTable tr.req-disabled td.desc-cell { text-decoration: line-through; }
+
 /* Column resize handles */
 #reqTable thead th {
   position: relative;
@@ -108,7 +112,11 @@
     <option value="GMP">GMP</option>
     <option value="GEP">GEP</option>
   </select>
-  <div class="ms-auto d-flex gap-2">
+  <div class="ms-auto d-flex gap-2 align-items-center">
+    <div class="form-check form-switch mb-0">
+      <input class="form-check-input" type="checkbox" id="showDisabled" checked/>
+      <label class="form-check-label small" for="showDisabled">Show disabled</label>
+    </div>
     <button class="btn btn-outline-secondary btn-sm" onclick="clearFilters()"><i class="bi bi-x-circle"></i> Clear</button>
     {% if user.role != 'viewer' %}
     <button class="btn btn-outline-warning btn-sm" data-bs-toggle="modal" data-bs-target="#findReplaceModal">
@@ -426,11 +434,14 @@ function renderTable() {
   const mustFilter = document.getElementById('filterMust').value;
   const gmpFilter  = document.getElementById('filterGmp').value;
 
+  const showDisabled = document.getElementById('showDisabled').checked;
+
   let rows = allReqs.filter(r => {
+    if (!showDisabled && !r.enabled)                       return false;
     if (secFilter  && String(r.section_id) !== secFilter)  return false;
     if (typeFilter && r.req_type !== typeFilter)            return false;
     if (mustFilter && String(r.must_have) !== mustFilter)  return false;
-    if (gmpFilter  && r.gmp_flag !== gmpFilter)             return false;
+    if (gmpFilter  && r.gmp_flag !== gmpFilter)            return false;
     return true;
   });
 
@@ -451,11 +462,15 @@ function renderTable() {
     const gmpBadge = r.gmp_flag === 'GMP'
       ? '<span class="badge bg-success">GMP</span>'
       : '<span class="badge bg-secondary">GEP</span>';
+    const toggleIcon = r.enabled
+      ? `<button class="btn btn-outline-secondary btn-sm py-0 px-1" onclick="toggleReq(${r.id})" title="Disable"><i class="bi bi-toggle-on text-success"></i></button>`
+      : `<button class="btn btn-outline-secondary btn-sm py-0 px-1" onclick="toggleReq(${r.id})" title="Enable"><i class="bi bi-toggle-off text-danger"></i></button>`;
     const actions = CAN_EDIT ? `
+      ${toggleIcon}
       <button class="btn btn-outline-primary btn-sm py-0 px-1" onclick="openEditReq(${r.id})" title="Edit"><i class="bi bi-pencil"></i></button>
       <button class="btn btn-outline-danger btn-sm py-0 px-1" onclick="confirmDeleteReq(${r.id}, '${(r.req_id||'').replace(/'/g,"\\'")}' )" title="Delete"><i class="bi bi-trash"></i></button>
     ` : '';
-    return `<tr>
+    return `<tr class="${r.enabled ? '' : 'req-disabled'}">
       <td>${r.section_name || '<span class="text-muted">—</span>'}</td>
       <td><code>${r.req_id || ''}</code></td>
       <td><span class="badge bg-${typeColor} req-type-badge">${typeLabel}</span></td>
@@ -525,6 +540,7 @@ function clearFilters() {
 ['filterSection','filterType','filterMust','filterGmp'].forEach(id => {
   document.getElementById(id).addEventListener('change', renderTable);
 });
+document.getElementById('showDisabled').addEventListener('change', renderTable);
 
 // --- Req ID auto-suggestion ---
 function suggestReqId(sectionId) {
@@ -607,6 +623,12 @@ function confirmDeleteReq(id, reqId) {
   document.getElementById('deleteReqId').textContent = reqId || `#${id}`;
   document.getElementById('deleteReqConfirm').onclick = () => deleteRequirement(id);
   new bootstrap.Modal(document.getElementById('deleteReqModal')).show();
+}
+
+async function toggleReq(id) {
+  const res = await fetch(`/api/requirements/${id}/toggle-enabled`, { method: 'POST' });
+  if (!res.ok) { alert('Failed to toggle requirement.'); return; }
+  await loadRequirements();
 }
 
 async function deleteRequirement(id) {
