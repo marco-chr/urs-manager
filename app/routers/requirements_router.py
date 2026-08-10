@@ -18,7 +18,7 @@ class RequirementIn(BaseModel):
     req_type: str = "functional"
     description: str
     must_have: bool = True
-    gmp_flag: bool = False
+    gmp_flag: str = "GEP"  # "GMP" or "GEP"
     note: Optional[str] = ""
 
 

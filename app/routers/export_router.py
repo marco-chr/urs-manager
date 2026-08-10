@@ -95,7 +95,7 @@ def export_excel(request: Request, system_id: int, db: Session = Depends(get_db)
 
     # --- All requirements sheet ---
     ws_all = wb.create_sheet("All Requirements")
-    headers = ["Section", "Req ID", "Type", "Description", "Must Have", "GMP", "Note"]
+    headers = ["Section", "Req ID", "Type", "Description", "Must Have", "GMP/GEP", "Note"]
     _add_header(ws_all, headers)
     ws_all.column_dimensions["A"].width = 22
     ws_all.column_dimensions["B"].width = 12
@@ -113,7 +113,7 @@ def export_excel(request: Request, system_id: int, db: Session = Depends(get_db)
             REQ_TYPE_LABELS.get(req.req_type, req.req_type),
             req.description,
             "Must Have" if req.must_have else "Nice to Have",
-            "Yes" if req.gmp_flag else "No",
+            req.gmp_flag or "GEP",
             req.note or "",
         ]
         ws_all.append(row)
@@ -142,7 +142,7 @@ def export_excel(request: Request, system_id: int, db: Session = Depends(get_db)
                 REQ_TYPE_LABELS.get(req.req_type, req.req_type),
                 req.description,
                 "Must Have" if req.must_have else "Nice to Have",
-                "Yes" if req.gmp_flag else "No",
+                req.gmp_flag or "GEP",
                 req.note or "",
             ]
             ws.append(row)

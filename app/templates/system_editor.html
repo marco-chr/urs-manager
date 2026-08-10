@@ -104,9 +104,9 @@
     <option value="false">Nice to Have</option>
   </select>
   <select id="filterGmp" class="form-select form-select-sm" style="width:auto">
-    <option value="">GMP / Non-GMP</option>
-    <option value="true">GMP</option>
-    <option value="false">Non-GMP</option>
+    <option value="">GMP / GEP</option>
+    <option value="GMP">GMP</option>
+    <option value="GEP">GEP</option>
   </select>
   <div class="ms-auto d-flex gap-2">
     <button class="btn btn-outline-secondary btn-sm" onclick="clearFilters()"><i class="bi bi-x-circle"></i> Clear</button>
@@ -128,7 +128,7 @@
         <th>Type</th>
         <th>Description</th>
         <th>Must Have</th>
-        <th>GMP</th>
+        <th>GMP/GEP</th>
         <th>Note</th>
         {% if user.role != 'viewer' %}
         <th style="width:80px">Actions</th>
@@ -256,10 +256,11 @@
             </div>
           </div>
           <div class="col-md-6">
-            <div class="form-check form-switch">
-              <input class="form-check-input" type="checkbox" id="fGmpFlag"/>
-              <label class="form-check-label fw-semibold" for="fGmpFlag">GMP Requirement</label>
-            </div>
+            <label class="form-label fw-semibold">GMP / GEP</label>
+            <select id="fGmpFlag" class="form-select">
+              <option value="GEP">GEP — Good Engineering Practice</option>
+              <option value="GMP">GMP — Validation required</option>
+            </select>
           </div>
         </div>
       </div>
@@ -429,7 +430,7 @@ function renderTable() {
     if (secFilter  && String(r.section_id) !== secFilter)  return false;
     if (typeFilter && r.req_type !== typeFilter)            return false;
     if (mustFilter && String(r.must_have) !== mustFilter)  return false;
-    if (gmpFilter  && String(r.gmp_flag)  !== gmpFilter)   return false;
+    if (gmpFilter  && r.gmp_flag !== gmpFilter)             return false;
     return true;
   });
 
@@ -447,9 +448,9 @@ function renderTable() {
     const mustBadge = r.must_have
       ? '<span class="badge bg-danger">Must</span>'
       : '<span class="badge bg-light text-dark border">Nice</span>';
-    const gmpBadge = r.gmp_flag
-      ? '<span class="flag-yes"><i class="bi bi-check-circle-fill"></i> GMP</span>'
-      : '<span class="flag-no"><i class="bi bi-dash"></i></span>';
+    const gmpBadge = r.gmp_flag === 'GMP'
+      ? '<span class="badge bg-success">GMP</span>'
+      : '<span class="badge bg-secondary">GEP</span>';
     const actions = CAN_EDIT ? `
       <button class="btn btn-outline-primary btn-sm py-0 px-1" onclick="openEditReq(${r.id})" title="Edit"><i class="bi bi-pencil"></i></button>
       <button class="btn btn-outline-danger btn-sm py-0 px-1" onclick="confirmDeleteReq(${r.id}, '${(r.req_id||'').replace(/'/g,"\\'")}' )" title="Delete"><i class="bi bi-trash"></i></button>
@@ -559,7 +560,7 @@ function openAddReq() {
   document.getElementById('fDescription').value = '';
   document.getElementById('fNote').value = '';
   document.getElementById('fMustHave').checked = true;
-  document.getElementById('fGmpFlag').checked = false;
+  document.getElementById('fGmpFlag').value = 'GEP';
 
   // Pre-select active section filter and suggest a req ID
   const activeSec = document.getElementById('filterSection').value;
@@ -578,7 +579,7 @@ function openEditReq(id) {
   document.getElementById('fDescription').value = r.description;
   document.getElementById('fNote').value = r.note;
   document.getElementById('fMustHave').checked = r.must_have;
-  document.getElementById('fGmpFlag').checked = r.gmp_flag;
+  document.getElementById('fGmpFlag').value = r.gmp_flag || 'GEP';
   new bootstrap.Modal(document.getElementById('reqModal')).show();
 }
 
@@ -590,7 +591,7 @@ async function saveRequirement() {
     req_type: document.getElementById('fType').value,
     description: document.getElementById('fDescription').value.trim(),
     must_have: document.getElementById('fMustHave').checked,
-    gmp_flag: document.getElementById('fGmpFlag').checked,
+    gmp_flag: document.getElementById('fGmpFlag').value,
     note: document.getElementById('fNote').value.trim(),
   };
   if (!body.description) { alert('Description is required.'); return; }

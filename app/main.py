@@ -5,6 +5,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from app.database import engine, SessionLocal
 from app import models
 from app.auth import seed_admin
+from app.migrations import run_all as run_migrations
 from app.routers import (
     auth_router, systems_router, sections_router,
     requirements_router, templates_router, export_router,
@@ -15,6 +16,7 @@ models.Base.metadata.create_all(bind=engine)
 
 with SessionLocal() as db:
     seed_admin(db)
+    run_migrations(db)
 
 app = FastAPI(title="URS Manager")
 

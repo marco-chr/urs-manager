@@ -51,7 +51,7 @@ class TemplateRequirement(Base):
     req_type = Column(String(32))
     description = Column(Text, nullable=False)
     must_have = Column(Boolean, default=True)
-    gmp_flag = Column(Boolean, default=False)
+    gmp_flag = Column(String(8), default="GEP")  # "GMP" or "GEP"
     note = Column(Text)
 
     template = relationship("Template", back_populates="requirements")
@@ -105,7 +105,7 @@ class Requirement(Base):
     req_type = Column(String(32), default="functional")
     description = Column(Text, nullable=False)
     must_have = Column(Boolean, default=True)
-    gmp_flag = Column(Boolean, default=False)
+    gmp_flag = Column(String(8), default="GEP")  # "GMP" or "GEP"
     note = Column(Text)
     created_by = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime, default=datetime.utcnow)
