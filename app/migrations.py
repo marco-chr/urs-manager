@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 def run_all(db: Session):
     _migrate_gmp_flag_to_string(db)
     _migrate_add_enabled_column(db)
+    _migrate_add_system_metadata(db)
 
 
 def _migrate_add_enabled_column(db: Session):
@@ -15,6 +16,17 @@ def _migrate_add_enabled_column(db: Session):
         db.commit()
     except Exception:
         db.rollback()  # column already exists — safe to ignore
+
+
+def _migrate_add_system_metadata(db: Session):
+    """Add company_name, plant, address, country, building to systems."""
+    for col in ("company_name VARCHAR(256)", "plant VARCHAR(256)",
+                "address VARCHAR(512)", "country VARCHAR(128)", "building VARCHAR(256)"):
+        try:
+            db.execute(text(f"ALTER TABLE systems ADD COLUMN {col}"))
+            db.commit()
+        except Exception:
+            db.rollback()
 
 
 def _migrate_gmp_flag_to_string(db: Session):

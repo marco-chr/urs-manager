@@ -162,7 +162,21 @@
           <div class="mb-3"><label class="form-label fw-semibold">Name</label>
             <input type="text" name="name" class="form-control" value="{{ system.name }}" required/></div>
           <div class="mb-3"><label class="form-label fw-semibold">Description</label>
-            <textarea name="description" class="form-control" rows="3">{{ system.description or '' }}</textarea></div>
+            <textarea name="description" class="form-control" rows="2">{{ system.description or '' }}</textarea></div>
+          <div class="row g-2 mb-2">
+            <div class="col-md-6"><label class="form-label fw-semibold">Company Name</label>
+              <input type="text" name="company_name" class="form-control" value="{{ system.company_name or '' }}"/></div>
+            <div class="col-md-6"><label class="form-label fw-semibold">Plant</label>
+              <input type="text" name="plant" class="form-control" value="{{ system.plant or '' }}"/></div>
+          </div>
+          <div class="mb-2"><label class="form-label fw-semibold">Address</label>
+            <input type="text" name="address" class="form-control" value="{{ system.address or '' }}"/></div>
+          <div class="row g-2 mb-3">
+            <div class="col-md-6"><label class="form-label fw-semibold">Country</label>
+              <input type="text" name="country" class="form-control" value="{{ system.country or '' }}"/></div>
+            <div class="col-md-6"><label class="form-label fw-semibold">Building</label>
+              <input type="text" name="building" class="form-control" value="{{ system.building or '' }}"/></div>
+          </div>
           <div class="mb-3"><label class="form-label fw-semibold">Status</label>
             <select name="status" class="form-select">
               {% for st in ['draft','review','approved'] %}

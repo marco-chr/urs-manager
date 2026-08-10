@@ -49,4 +49,8 @@ def serialize_section(sec: models.Section) -> dict:
 
 
 def serialize_system(sys: models.System) -> dict:
-    return {"name": sys.name, "description": sys.description, "status": sys.status}
+    return {
+        "name": sys.name, "description": sys.description, "status": sys.status,
+        "company_name": sys.company_name, "plant": sys.plant,
+        "address": sys.address, "country": sys.country, "building": sys.building,
+    }

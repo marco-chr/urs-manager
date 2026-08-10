@@ -62,6 +62,11 @@ class System(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(128), nullable=False)
     description = Column(Text)
+    company_name = Column(String(256))
+    plant = Column(String(256))
+    address = Column(String(512))
+    country = Column(String(128))
+    building = Column(String(256))
     status = Column(String(16), default="draft")  # draft, review, approved
     created_by = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime, default=datetime.utcnow)

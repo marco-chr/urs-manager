@@ -43,6 +43,11 @@ def create_system(
     request: Request,
     name: str = Form(...),
     description: str = Form(""),
+    company_name: str = Form(""),
+    plant: str = Form(""),
+    address: str = Form(""),
+    country: str = Form(""),
+    building: str = Form(""),
     template_id: str = Form(""),
     db: Session = Depends(get_db),
 ):
@@ -50,7 +55,12 @@ def create_system(
     if not user:
         return RedirectResponse("/login", status_code=302)
 
-    system = models.System(name=name, description=description, created_by=user.id)
+    system = models.System(
+        name=name, description=description,
+        company_name=company_name or None, plant=plant or None,
+        address=address or None, country=country or None, building=building or None,
+        created_by=user.id,
+    )
     db.add(system)
     db.flush()
 
@@ -89,6 +99,11 @@ def update_system(
     system_id: int,
     name: str = Form(...),
     description: str = Form(""),
+    company_name: str = Form(""),
+    plant: str = Form(""),
+    address: str = Form(""),
+    country: str = Form(""),
+    building: str = Form(""),
     status: str = Form("draft"),
     db: Session = Depends(get_db),
 ):
@@ -103,6 +118,11 @@ def update_system(
     old = audit.serialize_system(system)
     system.name = name
     system.description = description
+    system.company_name = company_name or None
+    system.plant = plant or None
+    system.address = address or None
+    system.country = country or None
+    system.building = building or None
     system.status = status
     system.updated_at = datetime.utcnow()
     db.commit()
