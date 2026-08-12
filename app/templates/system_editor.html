@@ -51,9 +51,21 @@
     </nav>
     <h5 class="mb-0 mt-1">
       {{ system.name }}
-      <span class="badge {% if system.status == 'approved' %}bg-success{% elif system.status == 'review' %}bg-warning text-dark{% else %}bg-secondary{% endif %} ms-1">
-        {{ system.status }}
+      <span class="badge
+        {% if system.status == 'approved' %}bg-success
+        {% elif system.status == 'reviewed' %}bg-info
+        {% elif system.status in ('review', 'in_approval') %}bg-warning text-dark
+        {% else %}bg-secondary{% endif %} ms-1">
+        {% if system.status == 'draft' %}Draft
+        {% elif system.status == 'review' %}In Review
+        {% elif system.status == 'reviewed' %}Reviewed
+        {% elif system.status == 'in_approval' %}In Approval
+        {% elif system.status == 'approved' %}Approved
+        {% else %}{{ system.status }}{% endif %}
       </span>
+      <small class="text-muted ms-2 fw-normal" style="font-size:.8rem">
+        v{{ system.major_version or 0 }}.{{ system.minor_version or 0 }}
+      </small>
     </h5>
   </div>
   <div class="d-flex gap-2 flex-wrap">
@@ -67,6 +79,9 @@
       <i class="bi bi-collection"></i> Sections
     </button>
     {% endif %}
+    <a href="/systems/{{ system.id }}/review" class="btn btn-outline-primary btn-sm">
+      <i class="bi bi-clipboard2-check"></i> Review &amp; Approval
+    </a>
     <a href="/systems/{{ system.id }}/export/excel" class="btn btn-outline-success btn-sm">
       <i class="bi bi-file-earmark-excel"></i> Export Excel
     </a>

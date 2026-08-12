@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}My Signatures — URS Manager{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h5 class="mb-0"><i class="bi bi-pen me-1"></i> My Signatures</h5>
+</div>
+
+{% if actionable %}
+<div class="alert alert-warning d-flex align-items-center gap-2 mb-4">
+  <i class="bi bi-exclamation-triangle-fill fs-5"></i>
+  <div>You have <strong>{{ actionable|length }}</strong> pending signature{{ 's' if actionable|length != 1 else '' }}.</div>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>System</th>
+          <th>Company / Plant</th>
+          <th>Your Role</th>
+          <th>Function</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for sig in actionable %}
+      {% set sys = systems[sig.system_id] %}
+      <tr>
+        <td>
+          <strong>{{ sys.name }}</strong>
+          <br><small class="text-muted">v{{ sys.major_version or 0 }}.{{ sys.minor_version or 0 }}</small>
+        </td>
+        <td>
+          <small>
+            {% if sys.company_name %}{{ sys.company_name }}{% endif %}
+            {% if sys.company_name and sys.plant %} / {% endif %}
+            {% if sys.plant %}{{ sys.plant }}{% endif %}
+            {% if not sys.company_name and not sys.plant %}—{% endif %}
+          </small>
+        </td>
+        <td>
+          <span class="badge {% if sig.role == 'reviewer' %}bg-info{% else %}bg-primary{% endif %}">
+            {{ sig.role | capitalize }}
+          </span>
+        </td>
+        <td><small>{{ sig.function_text or '—' }}</small></td>
+        <td>
+          <span class="badge bg-warning text-dark">
+            {% if sys.status == 'review' %}In Review{% elif sys.status == 'in_approval' %}In Approval{% else %}{{ sys.status }}{% endif %}
+          </span>
+        </td>
+        <td>
+          <a href="/systems/{{ sys.id }}/review" class="btn btn-success btn-sm">
+            <i class="bi bi-pen"></i> Go to Sign
+          </a>
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% else %}
+<div class="text-center text-muted py-5">
+  <i class="bi bi-check-circle fs-1 d-block mb-2 text-success"></i>
+  <p class="mb-0">No pending signatures. You're all caught up!</p>
+</div>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,431 @@
+{% extends "base.html" %}
+{% block title %}Review & Approval — {{ system.name }}{% endblock %}
+
+{% block extra_head %}
+<style>
+.sig-row-signed { background: #f0fff4; }
+.sig-row-pending { background: #fff9f0; }
+.status-chip {
+  display: inline-block;
+  padding: .25rem .65rem;
+  border-radius: 1rem;
+  font-size: .78rem;
+  font-weight: 600;
+}
+.step-bar { display: flex; gap: 0; margin-bottom: 1.5rem; }
+.step { flex: 1; padding: .5rem .75rem; font-size: .8rem; font-weight: 600;
+        background: #e9ecef; color: #6c757d; text-align: center; border: 1px solid #dee2e6; }
+.step:first-child { border-radius: .375rem 0 0 .375rem; }
+.step:last-child  { border-radius: 0 .375rem .375rem 0; }
+.step.active { background: #0d6efd; color: #fff; border-color: #0d6efd; }
+.step.done   { background: #198754; color: #fff; border-color: #198754; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/">Dashboard</a></li>
+    <li class="breadcrumb-item"><a href="/systems/{{ system.id }}">{{ system.name }}</a></li>
+    <li class="breadcrumb-item active">Review &amp; Approval</li>
+  </ol>
+</nav>
+
+<!-- Header -->
+<div class="d-flex flex-wrap justify-content-between align-items-start mb-3 gap-2">
+  <div>
+    <h5 class="mb-1">
+      {{ system.name }}
+      <small class="text-muted fw-normal" style="font-size:.85rem">
+        &nbsp;v{{ system.major_version or 0 }}.{{ system.minor_version or 0 }}
+      </small>
+    </h5>
+    <span class="status-chip
+      {% if system.status == 'approved' %}bg-success text-white
+      {% elif system.status == 'reviewed' %}bg-info text-white
+      {% elif system.status in ('review', 'in_approval') %}bg-warning text-dark
+      {% else %}bg-secondary text-white{% endif %}">
+      <i class="bi bi-circle-fill me-1" style="font-size:.5rem;vertical-align:middle"></i>
+      {{ status_label }}
+    </span>
+  </div>
+  <div class="d-flex gap-2">
+    {% if can_reopen %}
+    <form method="post" action="/systems/{{ system.id }}/reopen"
+          onsubmit="return confirm('Reopen this document? All signatures will be reset.')">
+      <button type="submit" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-counterclockwise"></i> Reopen
+      </button>
+    </form>
+    {% endif %}
+    <a href="/systems/{{ system.id }}" class="btn btn-outline-primary btn-sm">
+      <i class="bi bi-pencil-square"></i> Back to Editor
+    </a>
+  </div>
+</div>
+
+<!-- Progress bar -->
+{% set steps = [('draft','Draft'),('review','In Review'),('reviewed','Reviewed'),('in_approval','In Approval'),('approved','Approved')] %}
+{% set order = {'draft':0,'review':1,'reviewed':2,'in_approval':3,'approved':4} %}
+{% set cur = order.get(system.status, 0) %}
+<div class="step-bar mb-4">
+  {% for skey, slabel in steps %}
+  {% set sidx = order[skey] %}
+  <div class="step {% if sidx < cur %}done{% elif sidx == cur %}active{% endif %}">
+    {% if sidx < cur %}<i class="bi bi-check-lg me-1"></i>{% endif %}{{ slabel }}
+  </div>
+  {% endfor %}
+</div>
+
+<div class="row g-4">
+
+  <!-- Reviewers -->
+  <div class="col-lg-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="fw-semibold"><i class="bi bi-search me-1"></i> Reviewers</span>
+        <span class="badge bg-secondary">{{ reviewers|length }}</span>
+      </div>
+      <div class="card-body p-0">
+        {% if reviewers %}
+        <table class="table table-sm mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Name</th><th>Function</th><th>Status</th><th>Signed At</th>
+              {% if can_add_signatories %}<th></th>{% endif %}
+            </tr>
+          </thead>
+          <tbody>
+          {% for sig in reviewers %}
+          <tr class="{% if sig.signed %}sig-row-signed{% else %}sig-row-pending{% endif %}">
+            <td>
+              <strong>{{ sig.user.username }}</strong>
+              {% if sig.user.full_name %}<br><small class="text-muted">{{ sig.user.full_name }}</small>{% endif %}
+            </td>
+            <td><small>{{ sig.function_text or '—' }}</small></td>
+            <td>
+              {% if sig.signed %}
+              <span class="badge bg-success"><i class="bi bi-check-lg"></i> Signed</span>
+              {% else %}
+              <span class="badge bg-warning text-dark"><i class="bi bi-clock"></i> Pending</span>
+              {% endif %}
+            </td>
+            <td><small>{{ sig.signed_at.strftime('%Y-%m-%d %H:%M') if sig.signed_at else '—' }}</small></td>
+            {% if can_add_signatories %}
+            <td>
+              <button class="btn btn-outline-danger btn-sm py-0"
+                      onclick="removeSignatory({{ sig.id }})">
+                <i class="bi bi-x"></i>
+              </button>
+            </td>
+            {% endif %}
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted small p-3 mb-0">No reviewers defined yet.</p>
+        {% endif %}
+      </div>
+      {% if can_add_signatories %}
+      <div class="card-footer bg-transparent">
+        <div class="d-flex gap-2 align-items-end flex-wrap">
+          <div>
+            <label class="form-label form-label-sm mb-1">Add Reviewer</label>
+            <select id="addReviewerUser" class="form-select form-select-sm">
+              <option value="">— select user —</option>
+              {% for u in available_users %}
+              {% if u.id not in reviewer_ids %}
+              <option value="{{ u.id }}">{{ u.username }}{% if u.full_name %} ({{ u.full_name }}){% endif %}</option>
+              {% endif %}
+              {% endfor %}
+            </select>
+          </div>
+          <div class="flex-fill">
+            <label class="form-label form-label-sm mb-1">Function / Role</label>
+            <input type="text" id="addReviewerFunc" class="form-control form-control-sm" placeholder="e.g. QA Lead"/>
+          </div>
+          <button class="btn btn-outline-primary btn-sm" onclick="addSignatory('reviewer')">
+            <i class="bi bi-plus-lg"></i> Add
+          </button>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Approvers -->
+  <div class="col-lg-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="fw-semibold"><i class="bi bi-patch-check me-1"></i> Approvers</span>
+        <span class="badge bg-secondary">{{ approvers|length }}</span>
+      </div>
+      <div class="card-body p-0">
+        {% if approvers %}
+        <table class="table table-sm mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Name</th><th>Function</th><th>Status</th><th>Signed At</th>
+              {% if can_add_signatories %}<th></th>{% endif %}
+            </tr>
+          </thead>
+          <tbody>
+          {% for sig in approvers %}
+          <tr class="{% if sig.signed %}sig-row-signed{% else %}sig-row-pending{% endif %}">
+            <td>
+              <strong>{{ sig.user.username }}</strong>
+              {% if sig.user.full_name %}<br><small class="text-muted">{{ sig.user.full_name }}</small>{% endif %}
+            </td>
+            <td><small>{{ sig.function_text or '—' }}</small></td>
+            <td>
+              {% if sig.signed %}
+              <span class="badge bg-success"><i class="bi bi-check-lg"></i> Signed</span>
+              {% else %}
+              <span class="badge bg-warning text-dark"><i class="bi bi-clock"></i> Pending</span>
+              {% endif %}
+            </td>
+            <td><small>{{ sig.signed_at.strftime('%Y-%m-%d %H:%M') if sig.signed_at else '—' }}</small></td>
+            {% if can_add_signatories %}
+            <td>
+              <button class="btn btn-outline-danger btn-sm py-0"
+                      onclick="removeSignatory({{ sig.id }})">
+                <i class="bi bi-x"></i>
+              </button>
+            </td>
+            {% endif %}
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted small p-3 mb-0">No approvers defined yet.</p>
+        {% endif %}
+      </div>
+      {% if can_add_signatories %}
+      <div class="card-footer bg-transparent">
+        <div class="d-flex gap-2 align-items-end flex-wrap">
+          <div>
+            <label class="form-label form-label-sm mb-1">Add Approver</label>
+            <select id="addApproverUser" class="form-select form-select-sm">
+              <option value="">— select user —</option>
+              {% for u in available_users %}
+              {% if u.id not in approver_ids %}
+              <option value="{{ u.id }}">{{ u.username }}{% if u.full_name %} ({{ u.full_name }}){% endif %}</option>
+              {% endif %}
+              {% endfor %}
+            </select>
+          </div>
+          <div class="flex-fill">
+            <label class="form-label form-label-sm mb-1">Function / Role</label>
+            <input type="text" id="addApproverFunc" class="form-control form-control-sm" placeholder="e.g. QA Director"/>
+          </div>
+          <button class="btn btn-outline-primary btn-sm" onclick="addSignatory('approver')">
+            <i class="bi bi-plus-lg"></i> Add
+          </button>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+</div><!-- /row -->
+
+<!-- Workflow Actions -->
+<div class="card shadow-sm mt-4">
+  <div class="card-header fw-semibold"><i class="bi bi-arrow-right-circle me-1"></i> Workflow Actions</div>
+  <div class="card-body">
+    <div class="row g-3 align-items-start">
+
+      {% if can_submit_review %}
+      <div class="col-md-6">
+        <form method="post" action="/systems/{{ system.id }}/submit-review">
+          <label class="form-label fw-semibold">Modification Note</label>
+          <textarea name="modification_note" class="form-control mb-2" rows="2"
+                    placeholder="Briefly describe what changed in this revision…">{{ system.modification_note or '' }}</textarea>
+          <button type="submit" class="btn btn-warning"
+                  onclick="return confirm('Submit for review? The signatory list will be locked.')">
+            <i class="bi bi-send"></i> Submit for Review
+          </button>
+        </form>
+      </div>
+      {% endif %}
+
+      {% if can_submit_approval %}
+      <div class="col-md-6">
+        <p class="text-muted small">All reviewers have signed. The document is ready for approval.</p>
+        <form method="post" action="/systems/{{ system.id }}/submit-approval">
+          <button type="submit" class="btn btn-primary"
+                  onclick="return confirm('Submit for approval?')">
+            <i class="bi bi-patch-check"></i> Submit for Approval
+          </button>
+        </form>
+      </div>
+      {% endif %}
+
+      {% if pending_sig %}
+      <div class="col-md-6">
+        <div class="alert alert-info mb-0">
+          <i class="bi bi-pen me-1"></i>
+          Your electronic signature is required as
+          <strong>{{ 'reviewer' if pending_sig.role == 'reviewer' else 'approver' }}</strong>.
+          <br>
+          <button class="btn btn-success mt-2" onclick="openSignModal()">
+            <i class="bi bi-pencil-square"></i> Sign Document
+          </button>
+        </div>
+      </div>
+      {% endif %}
+
+      {% if system.status in ('review', 'reviewed', 'in_approval', 'approved') and not pending_sig and not can_submit_approval %}
+      {% if system.status == 'review' %}
+      <div class="col-12">
+        <p class="text-muted small mb-0"><i class="bi bi-info-circle me-1"></i> Waiting for all reviewers to sign.</p>
+      </div>
+      {% elif system.status == 'in_approval' %}
+      <div class="col-12">
+        <p class="text-muted small mb-0"><i class="bi bi-info-circle me-1"></i> Waiting for all approvers to sign.</p>
+      </div>
+      {% elif system.status == 'approved' %}
+      <div class="col-12">
+        <p class="text-success small mb-0"><i class="bi bi-check-circle me-1"></i> Document is approved. Use Reopen to start a new revision cycle.</p>
+      </div>
+      {% endif %}
+      {% endif %}
+
+    </div>
+  </div>
+</div>
+
+<!-- Version History -->
+<div class="card shadow-sm mt-4 mb-4">
+  <div class="card-header fw-semibold"><i class="bi bi-clock-history me-1"></i> Version History</div>
+  {% if history %}
+  <div class="card-body p-0">
+    <table class="table table-sm mb-0">
+      <thead class="table-light">
+        <tr>
+          <th style="width:90px">Version</th>
+          <th>Modification Description</th>
+          <th style="width:150px">Approval Date</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for h in history %}
+      <tr>
+        <td><span class="badge bg-primary">v{{ h.version }}</span></td>
+        <td>{{ h.modification_text or '—' }}</td>
+        <td><small>{{ h.version_date.strftime('%Y-%m-%d %H:%M') }}</small></td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="card-body text-muted small">
+    <i class="bi bi-inbox me-1"></i> No approved versions yet.
+  </div>
+  {% endif %}
+</div>
+
+<!-- Sign Modal -->
+{% if pending_sig %}
+<div class="modal fade" id="signModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header bg-success text-white">
+        <h5 class="modal-title"><i class="bi bi-pen me-1"></i> Electronic Signature</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-1">Signing as <strong>{{ user.username }}</strong></p>
+        <p class="text-muted small mb-3">Role: {{ pending_sig.function_text or pending_sig.role }}</p>
+        <label class="form-label fw-semibold">Enter your password to confirm</label>
+        <input type="password" id="signPassword" class="form-control" placeholder="Password" autocomplete="current-password"/>
+        <div id="signError" class="text-danger small mt-1" style="display:none"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-success" onclick="submitSign()">
+          <i class="bi bi-check-lg"></i> Sign
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const SYSTEM_ID = {{ system.id }};
+
+function openSignModal() {
+  document.getElementById('signPassword').value = '';
+  document.getElementById('signError').style.display = 'none';
+  new bootstrap.Modal(document.getElementById('signModal')).show();
+  setTimeout(() => document.getElementById('signPassword').focus(), 300);
+}
+
+async function submitSign() {
+  const pw = document.getElementById('signPassword').value;
+  const errEl = document.getElementById('signError');
+  errEl.style.display = 'none';
+  if (!pw) { errEl.textContent = 'Please enter your password.'; errEl.style.display = ''; return; }
+  try {
+    const resp = await fetch(`/api/systems/${SYSTEM_ID}/sign`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({password: pw}),
+    });
+    if (!resp.ok) {
+      const data = await resp.json().catch(() => ({}));
+      errEl.textContent = data.detail || 'Signature failed.';
+      errEl.style.display = '';
+      return;
+    }
+    window.location.reload();
+  } catch(e) {
+    errEl.textContent = 'Network error.';
+    errEl.style.display = '';
+  }
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && document.getElementById('signModal')?.classList.contains('show')) {
+    submitSign();
+  }
+});
+
+async function addSignatory(role) {
+  const userSel = document.getElementById(role === 'reviewer' ? 'addReviewerUser' : 'addApproverUser');
+  const funcEl  = document.getElementById(role === 'reviewer' ? 'addReviewerFunc' : 'addApproverFunc');
+  const userId = parseInt(userSel.value);
+  if (!userId) { alert('Please select a user.'); return; }
+  const resp = await fetch(`/api/systems/${SYSTEM_ID}/signatories`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({user_id: userId, role: role, function_text: funcEl.value}),
+  });
+  if (!resp.ok) {
+    const d = await resp.json().catch(() => ({}));
+    alert(d.detail || 'Could not add signatory.');
+    return;
+  }
+  window.location.reload();
+}
+
+async function removeSignatory(sigId) {
+  if (!confirm('Remove this signatory?')) return;
+  const resp = await fetch(`/api/systems/${SYSTEM_ID}/signatories/${sigId}`, {method: 'DELETE'});
+  if (!resp.ok) {
+    const d = await resp.json().catch(() => ({}));
+    alert(d.detail || 'Could not remove signatory.');
+    return;
+  }
+  window.location.reload();
+}
+</script>
+{% endblock %}

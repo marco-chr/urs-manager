@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app import models, audit
 from app.auth import get_current_user, can_edit_system
+from app.utils import bump_minor_version
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
@@ -69,6 +70,7 @@ def create_requirement(request: Request, system_id: int, body: RequirementIn, db
         created_by=user.id,
     )
     db.add(req)
+    bump_minor_version(db, system_id)
     db.commit()
     db.refresh(req)
     audit.log(db, user, "requirements", req.id, "CREATE", new_value=audit.serialize_requirement(req), system_id=system_id)
@@ -94,6 +96,7 @@ def update_requirement(request: Request, req_id: int, body: RequirementIn, db: S
     req.gmp_flag = body.gmp_flag
     req.note = body.note
     req.updated_at = datetime.utcnow()
+    bump_minor_version(db, req.system_id)
     db.commit()
     audit.log(db, user, "requirements", req.id, "UPDATE", old_value=old, new_value=audit.serialize_requirement(req), system_id=req.system_id)
     return _serialize(req, db)
@@ -112,6 +115,7 @@ def delete_requirement(request: Request, req_id: int, db: Session = Depends(get_
     old = audit.serialize_requirement(req)
     system_id = req.system_id
     db.delete(req)
+    bump_minor_version(db, system_id)
     db.commit()
     audit.log(db, user, "requirements", req_id, "DELETE", old_value=old, system_id=system_id)
     return {"ok": True}
@@ -143,6 +147,8 @@ def find_replace(request: Request, system_id: int, body: FindReplaceIn, db: Sess
             db.flush()
             audit.log(db, user, "requirements", req.id, "UPDATE", old_value=old, new_value=audit.serialize_requirement(req), system_id=system_id)
             count += 1
+    if count:
+        bump_minor_version(db, system_id)
     db.commit()
     return {"replaced": count}
 
@@ -160,6 +166,7 @@ def toggle_enabled(request: Request, req_id: int, db: Session = Depends(get_db))
     old_state = bool(req.enabled)
     req.enabled = not old_state
     req.updated_at = datetime.utcnow()
+    bump_minor_version(db, req.system_id)
     db.commit()
     audit.log(
         db, user, "requirements", req.id, "UPDATE",

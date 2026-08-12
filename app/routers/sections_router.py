@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app import models, audit
 from app.auth import get_current_user, can_edit_system
+from app.utils import bump_minor_version
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/api")
@@ -39,6 +40,7 @@ def create_section(request: Request, system_id: int, body: SectionIn, db: Sessio
         raise HTTPException(403)
     section = models.Section(system_id=system_id, name=body.name, order=body.order)
     db.add(section)
+    bump_minor_version(db, system_id)
     db.commit()
     db.refresh(section)
     audit.log(db, user, "sections", section.id, "CREATE", new_value=audit.serialize_section(section), system_id=system_id)
@@ -58,6 +60,7 @@ def update_section(request: Request, section_id: int, body: SectionIn, db: Sessi
     old = audit.serialize_section(section)
     section.name = body.name
     section.order = body.order
+    bump_minor_version(db, section.system_id)
     db.commit()
     audit.log(db, user, "sections", section.id, "UPDATE", old_value=old, new_value=audit.serialize_section(section), system_id=section.system_id)
     return {"id": section.id, "name": section.name, "order": section.order}
@@ -77,6 +80,7 @@ def delete_section(request: Request, section_id: int, db: Session = Depends(get_
     system_id = section.system_id
     db.query(models.Requirement).filter(models.Requirement.section_id == section_id).update({"section_id": None})
     db.delete(section)
+    bump_minor_version(db, system_id)
     db.commit()
     audit.log(db, user, "sections", section_id, "DELETE", old_value=old, system_id=system_id)
     return {"ok": True}

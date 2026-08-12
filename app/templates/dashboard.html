@@ -21,9 +21,15 @@
           <h6 class="card-title mb-1">{{ sys.name }}</h6>
           <span class="badge
             {% if sys.status == 'approved' %}bg-success
-            {% elif sys.status == 'review' %}bg-warning text-dark
+            {% elif sys.status == 'reviewed' %}bg-info
+            {% elif sys.status in ('review', 'in_approval') %}bg-warning text-dark
             {% else %}bg-secondary{% endif %}">
-            {{ sys.status }}
+            {% if sys.status == 'draft' %}Draft
+            {% elif sys.status == 'review' %}In Review
+            {% elif sys.status == 'reviewed' %}Reviewed
+            {% elif sys.status == 'in_approval' %}In Approval
+            {% elif sys.status == 'approved' %}Approved
+            {% else %}{{ sys.status }}{% endif %}
           </span>
         </div>
         {% if sys.company_name or sys.plant %}

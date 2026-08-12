@@ -9,7 +9,7 @@ from app.migrations import run_all as run_migrations
 from app.routers import (
     auth_router, systems_router, sections_router,
     requirements_router, templates_router, export_router,
-    audit_router, users_router,
+    audit_router, users_router, review_router,
 )
 
 models.Base.metadata.create_all(bind=engine)
@@ -33,3 +33,4 @@ app.include_router(templates_router.router)
 app.include_router(export_router.router)
 app.include_router(audit_router.router)
 app.include_router(users_router.router)
+app.include_router(review_router.router)

@@ -67,7 +67,10 @@ class System(Base):
     address = Column(String(512))
     country = Column(String(128))
     building = Column(String(256))
-    status = Column(String(16), default="draft")  # draft, review, approved
+    status = Column(String(16), default="draft")  # draft, review, reviewed, in_approval, approved
+    major_version = Column(Integer, default=0)
+    minor_version = Column(Integer, default=0)
+    modification_note = Column(Text)
     created_by = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -119,6 +122,34 @@ class Requirement(Base):
 
     system = relationship("System", back_populates="requirements")
     section = relationship("Section", back_populates="requirements")
+    creator = relationship("User", foreign_keys=[created_by])
+
+
+class SystemSignatory(Base):
+    __tablename__ = "system_signatories"
+    id = Column(Integer, primary_key=True, index=True)
+    system_id = Column(Integer, ForeignKey("systems.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    role = Column(String(16), nullable=False)  # "reviewer" or "approver"
+    function_text = Column(String(256))
+    signed = Column(Boolean, default=False)
+    signed_at = Column(DateTime, nullable=True)
+    order = Column(Integer, default=0)
+
+    user = relationship("User", foreign_keys=[user_id])
+
+
+class SystemHistory(Base):
+    __tablename__ = "system_history"
+    id = Column(Integer, primary_key=True, index=True)
+    system_id = Column(Integer, ForeignKey("systems.id"), nullable=False)
+    version = Column(String(16))
+    major_version = Column(Integer)
+    minor_version = Column(Integer)
+    modification_text = Column(Text)
+    version_date = Column(DateTime, default=datetime.utcnow)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+
     creator = relationship("User", foreign_keys=[created_by])
 
 

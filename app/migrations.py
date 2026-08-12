@@ -6,6 +6,7 @@ def run_all(db: Session):
     _migrate_gmp_flag_to_string(db)
     _migrate_add_enabled_column(db)
     _migrate_add_system_metadata(db)
+    _migrate_add_version_fields(db)
 
 
 def _migrate_add_enabled_column(db: Session):
@@ -27,6 +28,23 @@ def _migrate_add_system_metadata(db: Session):
             db.commit()
         except Exception:
             db.rollback()
+
+
+def _migrate_add_version_fields(db: Session):
+    """Add major_version, minor_version, modification_note to systems."""
+    for col in ("major_version INTEGER DEFAULT 0", "minor_version INTEGER DEFAULT 0",
+                "modification_note TEXT"):
+        try:
+            db.execute(text(f"ALTER TABLE systems ADD COLUMN {col}"))
+            db.commit()
+        except Exception:
+            db.rollback()
+    try:
+        db.execute(text("UPDATE systems SET major_version = 0 WHERE major_version IS NULL"))
+        db.execute(text("UPDATE systems SET minor_version = 0 WHERE minor_version IS NULL"))
+        db.commit()
+    except Exception:
+        db.rollback()
 
 
 def _migrate_gmp_flag_to_string(db: Session):
