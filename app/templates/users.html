@@ -18,7 +18,15 @@
     <tr>
       <td><code>{{ u.username }}</code></td>
       <td>{{ u.full_name or '—' }}</td>
-      <td><span class="badge {% if u.role == 'admin' %}bg-danger{% elif u.role == 'editor' %}bg-primary{% else %}bg-secondary{% endif %}">{{ u.role }}</span></td>
+      <td>
+        <span class="badge
+          {% if u.role == 'admin' %}bg-danger
+          {% elif u.role == 'editor' %}bg-primary
+          {% elif u.role == 'reviewer' %}bg-success
+          {% else %}bg-secondary{% endif %}">
+          {{ u.role }}
+        </span>
+      </td>
       <td>{% if u.is_active %}<i class="bi bi-check-circle-fill text-success"></i>{% else %}<i class="bi bi-x-circle-fill text-danger"></i>{% endif %}</td>
       <td class="small">{{ u.created_at.strftime('%Y-%m-%d') }}</td>
       <td>
@@ -53,6 +61,7 @@
             <select name="role" class="form-select">
               <option value="editor">Editor</option>
               <option value="viewer">Viewer (read-only)</option>
+              <option value="reviewer">Reviewer/Approver (signatures only)</option>
               <option value="admin">Admin</option>
             </select>
           </div>
@@ -80,7 +89,8 @@
           <div class="mb-3"><label class="form-label fw-semibold">Role</label>
             <select name="role" id="euRole" class="form-select">
               <option value="editor">Editor</option>
-              <option value="viewer">Viewer</option>
+              <option value="viewer">Viewer (read-only)</option>
+              <option value="reviewer">Reviewer/Approver (signatures only)</option>
               <option value="admin">Admin</option>
             </select>
           </div>

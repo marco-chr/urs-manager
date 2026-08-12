@@ -31,6 +31,8 @@ def require_admin(request: Request, db: Session) -> models.User:
 
 def is_system_owner(user: models.User, system: models.System) -> bool:
     """True if the user is admin or the creator of the system."""
+    if user.role in ("viewer", "reviewer"):
+        return False
     return user.role == "admin" or system.created_by == user.id
 
 
@@ -38,7 +40,7 @@ def can_edit_system(user: models.User, system_id: int, db: Session) -> bool:
     """True if the user may edit requirements/sections in this system."""
     if user.role == "admin":
         return True
-    if user.role == "viewer":
+    if user.role in ("viewer", "reviewer"):
         return False
     system = db.query(models.System).filter(models.System.id == system_id).first()
     if not system:
