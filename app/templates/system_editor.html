@@ -85,6 +85,13 @@
     <a href="/systems/{{ system.id }}/export/excel" class="btn btn-outline-success btn-sm">
       <i class="bi bi-file-earmark-excel"></i> Export Excel
     </a>
+    {% if can_edit %}
+    <button class="btn btn-outline-success btn-sm" onclick="document.getElementById('importFileInput').click()">
+      <i class="bi bi-file-earmark-arrow-up"></i> Import Excel
+    </button>
+    <input type="file" id="importFileInput" accept=".xlsx,.xlsm" style="display:none"
+           onchange="importExcel(this)"/>
+    {% endif %}
     <a href="/systems/{{ system.id }}/audit" class="btn btn-outline-secondary btn-sm">
       <i class="bi bi-journal-text"></i> Audit Log
     </a>
@@ -743,6 +750,33 @@ async function removeCollaborator(userId, username) {
   const res = await fetch(`/api/systems/${SYSTEM_ID}/collaborators/${userId}`, { method: 'DELETE' });
   if (res.ok) location.reload();
   else alert('Failed to remove collaborator.');
+}
+
+async function importExcel(input) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = '';  // reset so the same file can be re-selected if needed
+  const fd = new FormData();
+  fd.append('file', file);
+  const btn = document.querySelector('[onclick*="importFileInput"]');
+  const origHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Importing…';
+  try {
+    const resp = await fetch(`/systems/${SYSTEM_ID}/import/excel`, { method: 'POST', body: fd });
+    const data = await resp.json();
+    if (!resp.ok) {
+      alert('Import failed: ' + (data.detail || 'Unknown error'));
+    } else {
+      alert(`Imported ${data.imported} requirement${data.imported !== 1 ? 's' : ''}.`);
+      loadRequirements();
+    }
+  } catch (e) {
+    alert('Network error during import.');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = origHtml;
+  }
 }
 </script>
 {% endblock %}

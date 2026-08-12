@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Request, Depends, HTTPException
+from fastapi import APIRouter, Request, Depends, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app import models
-from app.auth import get_current_user
-from openpyxl import Workbook
+from app import models, audit
+from app.auth import get_current_user, can_edit_system
+from app.utils import bump_minor_version
+from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 import io
@@ -170,3 +171,57 @@ def export_excel(request: Request, system_id: int, db: Session = Depends(get_db)
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.post("/systems/{system_id}/import/excel")
+async def import_excel(
+    request: Request,
+    system_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    user = _user(request, db)
+    if not user:
+        raise HTTPException(401)
+    if not can_edit_system(user, system_id, db):
+        raise HTTPException(403)
+    if not file.filename.endswith((".xlsx", ".xlsm", ".xltx", ".xltm")):
+        raise HTTPException(400, detail="Only .xlsx files are supported")
+
+    content = await file.read()
+    try:
+        wb = load_workbook(filename=io.BytesIO(content), read_only=True, data_only=True)
+    except Exception:
+        raise HTTPException(400, detail="Could not read the Excel file — make sure it is a valid .xlsx")
+
+    ws = wb.active
+    imported = 0
+    for row in ws.iter_rows(min_col=1, max_col=1, values_only=True):
+        value = row[0]
+        if value is None:
+            continue
+        description = str(value).strip()
+        if not description:
+            continue
+        req = models.Requirement(
+            system_id=system_id,
+            description=description,
+            req_type="functional",
+            must_have=True,
+            gmp_flag="GEP",
+            enabled=True,
+            created_by=user.id,
+        )
+        db.add(req)
+        imported += 1
+
+    if imported:
+        bump_minor_version(db, system_id)
+        db.commit()
+        # Audit a single entry for the batch import
+        audit.log(db, user, "requirements", system_id, "IMPORT",
+                  new_value={"imported": imported, "source": file.filename},
+                  system_id=system_id)
+
+    wb.close()
+    return {"imported": imported}
