@@ -104,7 +104,6 @@ def update_system(
     address: str = Form(""),
     country: str = Form(""),
     building: str = Form(""),
-    status: str = Form("draft"),
     db: Session = Depends(get_db),
 ):
     user = _current_user(request, db)
@@ -123,7 +122,6 @@ def update_system(
     system.address = address or None
     system.country = country or None
     system.building = building or None
-    system.status = status
     system.updated_at = datetime.utcnow()
     db.commit()
     audit.log(db, user, "systems", system.id, "UPDATE", old_value=old, new_value=audit.serialize_system(system), system_id=system.id)

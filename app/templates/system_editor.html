@@ -192,13 +192,6 @@
             <div class="col-md-6"><label class="form-label fw-semibold">Building</label>
               <input type="text" name="building" class="form-control" value="{{ system.building or '' }}"/></div>
           </div>
-          <div class="mb-3"><label class="form-label fw-semibold">Status</label>
-            <select name="status" class="form-select">
-              {% for st in ['draft','review','approved'] %}
-              <option value="{{ st }}" {% if system.status == st %}selected{% endif %}>{{ st.title() }}</option>
-              {% endfor %}
-            </select>
-          </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
